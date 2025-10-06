@@ -1,8 +1,16 @@
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
+#include <TinyGsmClient.h>
+
+#define TINY_GSM_MODEM_SIM7600     // für A76xx Familie
+
 
 HardwareSerial SerialAT(1); 
 TinyGPSPlus gps;
+
+TinyGsm       modem(SerialAT);
+TinyGsmClient net(modem);
+
 
 void setup()
 {
