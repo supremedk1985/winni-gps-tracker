@@ -1,12 +1,14 @@
 #include <Arduino.h>
 #include <TinyGPSPlus.h>
 
-HardwareSerial SerialAT(1); // GNSS-Daten vom A7670E
+HardwareSerial SerialAT(1); 
+HardwareSerial SerialGNSS(2);  
 TinyGPSPlus gps;
 
 void setup()
 {
   Serial.begin(115200);
+
   SerialAT.begin(115200, SERIAL_8N1, 17, 18); // GNSS-Port
 
   pinMode(33, OUTPUT);
