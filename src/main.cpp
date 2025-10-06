@@ -2,7 +2,6 @@
 #include <TinyGPSPlus.h>
 
 HardwareSerial SerialAT(1); 
-HardwareSerial SerialGNSS(2);  
 TinyGPSPlus gps;
 
 void setup()
