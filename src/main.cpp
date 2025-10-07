@@ -49,51 +49,99 @@ void restartModem()
   delay(5000);
 }
 
-// GNSSINFO-Zeile auswerten
+// einfache Plausibilitätsprüfung
+static bool isFiniteCoord(const String &s)
+{
+  if (s.length() == 0)
+    return false;
+  bool dotSeen = false, digitSeen = false;
+  int start = (s[0] == '-' || s[0] == '+') ? 1 : 0;
+  for (int i = start; i < s.length(); i++)
+  {
+    char c = s[i];
+    if (c == '.')
+    {
+      if (dotSeen)
+        return false;
+      dotSeen = true;
+    }
+    else if (c < '0' || c > '9')
+      return false;
+    else
+      digitSeen = true;
+  }
+  return digitSeen;
+}
+
+// GNSSINFO-Zeile auswerten (liefert true nur bei VALIDER Lat/Lon)
 bool parseCGNSSInfo(String resp)
 {
   // Beispiel: +CGNSSINFO: 3,14,,11,00,51.8838463,N,8.2499580,E,071025,...
-  int firstComma = resp.indexOf(":");
-  if (firstComma == -1)
+  int colon = resp.indexOf(':');
+  if (colon < 0)
     return false;
 
-  // Alles nach dem ":" holen und splitten
-  String data = resp.substring(firstComma + 1);
+  String data = resp.substring(colon + 1);
   data.trim();
 
-  // Felder trennen
-  int fieldIndex = 0;
-  int lastPos = 0;
-  String fields[20];
-
-  for (int i = 0; i < data.length(); i++)
+  String fields[24];
+  int idx = 0, last = 0;
+  for (int i = 0; i < data.length() && idx < 23; i++)
   {
     if (data[i] == ',')
     {
-      fields[fieldIndex++] = data.substring(lastPos, i);
-      lastPos = i + 1;
-      if (fieldIndex >= 19)
-        break;
+      fields[idx++] = data.substring(last, i);
+      last = i + 1;
     }
   }
-  fields[fieldIndex] = data.substring(lastPos);
+  fields[idx] = data.substring(last);
 
-  // In diesem Format:
-  // [0]=3 [1]=14 [2]= (leer) [3]=11 [4]=00 [5]=51.8838463 [6]=N [7]=8.2499580 [8]=E ...
-  if (fields[5].length() > 0 && fields[7].length() > 0)
+  // Erwartete Positionen:
+  // 5 = lat, 6 = N/S, 7 = lon, 8 = E/W
+  if (idx < 8)
   {
-    latitude = fields[5];
-    if (fields[6] == "S")
-      latitude = "-" + latitude;
-    longitude = fields[7];
-    if (fields[8] == "W")
-      longitude = "-" + longitude;
-    Serial.printf("📍 Geparst: Lat=%s, Lon=%s\n", latitude.c_str(), longitude.c_str());
-    return true;
+    Serial.println("⚠️ Zu wenige Felder in +CGNSSINFO.");
+    return false;
   }
 
-  Serial.println("⚠️ Konnte Koordinaten nicht auswerten.");
-  return false;
+  String lat = fields[5];
+  lat.trim();
+  String latHem = fields[6];
+  latHem.trim();
+  String lon = fields[7];
+  lon.trim();
+  String lonHem = fields[8];
+  lonHem.trim();
+
+  if (!(latHem == "N" || latHem == "S") || !(lonHem == "E" || lonHem == "W"))
+  {
+    Serial.println("⚠️ Himmelsrichtungen fehlen/ungültig.");
+    return false;
+  }
+  if (!isFiniteCoord(lat) || !isFiniteCoord(lon))
+  {
+    Serial.println("⚠️ Lat/Lon nicht numerisch.");
+    return false;
+  }
+
+  // Zahlen prüfen & Wertebereiche
+  double latVal = lat.toDouble();
+  double lonVal = lon.toDouble();
+  if (latHem == "S")
+    latVal = -latVal;
+  if (lonHem == "W")
+    lonVal = -lonVal;
+
+  if (latVal < -90.0 || latVal > 90.0 || lonVal < -180.0 || lonVal > 180.0)
+  {
+    Serial.println("⚠️ Lat/Lon außerhalb gültiger Bereiche.");
+    return false;
+  }
+
+  latitude = String(latVal, 7);
+  longitude = String(lonVal, 7);
+  Serial.printf("📍 Geparst (valid): Lat=%s, Lon=%s\n", latitude.c_str(), longitude.c_str());
+  return true;
 }
 
 void setup()
@@ -130,7 +178,7 @@ void setup()
     }
   }
 
-  // GNSS-Ausgabe starten
+  // GNSS-Ausgabe starten (Testausgabe)
   SerialAT.println("AT+CGNSSTST=1");
   delay(500);
 
@@ -144,7 +192,7 @@ void setup()
   // GNSS-Fix abfragen
   Serial.println("Warte auf GNSS-Fix...");
   unsigned long start = millis();
-  bool gotFix = false;
+  bool gotValidFix = false;
 
   while (millis() - start < 200000)
   { // 200 Sekunden
@@ -160,36 +208,39 @@ void setup()
       {
         if (parseCGNSSInfo(resp))
         {
-          Serial.println("✅ GNSS-Fix gefunden!");
-          gotFix = true;
+          Serial.println("✅ Valider GNSS-Fix gefunden!");
+          gotValidFix = true;
           break;
+        }
+        else
+        {
+          Serial.println("ℹ️ GNSSINFO empfangen, aber (noch) nicht valide.");
         }
       }
     }
     else
     {
-      // GNSS-Ausgabe starten
+      // Falls Modem die Testausgabe stoppt, erneut anschieben
       SerialAT.println("AT+CGNSSTST=1");
       delay(1000);
     }
   }
 
-  if (!gotFix)
-  {
-    Serial.println("❌ Kein Fix, verwende 0/0");
-    latitude = "0.0";
-    longitude = "0.0";
-  }
-
-  // GNSS ausschalten
+  // GNSS ausschalten (Konflikte vermeiden)
   SerialAT.println("AT+CGNSSPWR=0");
   delay(1000);
 
-  // LTE verbinden
+  if (!gotValidFix)
+  {
+    Serial.println("⛔ Kein valider Fix — es wird NICHT an Node-RED gesendet.");
+    return; // <<— Ende: Kein Senden ohne validen Fix
+  }
+
+  // LTE verbinden (nur wenn valider Fix)
   Serial.println("Verbinde LTE...");
   if (!modem.waitForNetwork(30000) || !modem.gprsConnect(APN, USER, PASS))
   {
-    Serial.println("❌ LTE fehlgeschlagen");
+    Serial.println("❌ LTE fehlgeschlagen — es wird NICHT gesendet.");
     return;
   }
   Serial.println("✅ LTE verbunden!");
