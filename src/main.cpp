@@ -5,23 +5,23 @@
 
 HardwareSerial SerialAT(1);
 TinyGsm modem(SerialAT);
+TinyGsmClient client(modem);
 
-String latitude = "";
-String longitude = "";
+const char APN[]   = "internet";  // o2
+const char USER[]  = "";
+const char PASS[]  = "";
 
-// 🔧 o2 Zugangsdaten (ohne PIN)
-const char apn[] = "internet";
-const char user[] = "";
-const char pass[] = "";
+const char SERVER[] = "supremedk1.synology.me";
+const int  PORT     = 1880;
+const char PATH[]   = "/gps";
+const char TOKEN[]  = "jlkdsfjhksdkf230s3490";
 
-// Zielserver für Test
-const char* host = "httpbin.org";
-const int   port = 80;
+String latitude, longitude, imei;
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n=== A7670E GNSS → LTE Upload Demo ===");
+  Serial.println("=== A7670E GNSS → LTE → Node-RED POST ===");
 
   pinMode(33, OUTPUT);
   digitalWrite(33, HIGH);
@@ -31,15 +31,21 @@ void setup() {
   delay(3000);
   modem.restart();
 
-  // 1️⃣ GNSS aktivieren
-  Serial.println("Starte GNSS...");
+  // GNSS aktivieren
   SerialAT.println("AT+CGNSSPWR=1");
   delay(2000);
 
-  // 2️⃣ Warten auf GNSS-Fix
-  bool gotFix = false;
+  // IMEI abrufen
+  SerialAT.println("AT+GSN");
+  delay(500);
+  if (SerialAT.available()) imei = SerialAT.readStringUntil('\n');
+  imei.trim();
+
+  // GNSS-Fix abfragen
+  Serial.println("Warte auf GNSS-Fix...");
   unsigned long start = millis();
-  while (millis() - start < 20000) { // 20s Timeout
+  bool gotFix = false;
+  while (millis() - start < 20000) {
     SerialAT.println("AT+CGNSSINFO");
     delay(1000);
     if (SerialAT.available()) {
@@ -47,54 +53,58 @@ void setup() {
       if (resp.indexOf("+CGNSSINFO:") >= 0 && resp.indexOf(",N,") > 0) {
         Serial.println("✅ GNSS-Fix gefunden!");
         Serial.println(resp);
-        // Einfaches Parsen: Breite, Länge extrahieren
-        int firstComma = resp.indexOf(":") + 1;
-        int secondComma = resp.indexOf(",", firstComma);
-        latitude = resp.substring(firstComma, secondComma);
-        int nextComma = resp.indexOf(",", secondComma + 1);
-        longitude = resp.substring(secondComma + 1, nextComma);
+        int a = resp.indexOf(":") + 1;
+        int b = resp.indexOf(",", a);
+        latitude = resp.substring(a, b);
+        int c = resp.indexOf(",", b + 1);
+        longitude = resp.substring(b + 1, c);
         gotFix = true;
         break;
       }
     }
   }
-
   if (!gotFix) {
-    Serial.println("❌ Kein GNSS-Fix (Timeout)");
+    Serial.println("❌ Kein Fix, verwende 0/0");
     latitude = "0.0";
     longitude = "0.0";
   }
 
-  // GNSS aus, um Konflikt zu vermeiden
+  // GNSS ausschalten, um Konflikte zu vermeiden
   SerialAT.println("AT+CGNSSPWR=0");
   delay(1000);
 
-  // 3️⃣ LTE-Verbindung herstellen
+  // LTE verbinden
   Serial.println("Verbinde LTE...");
-  if (!modem.waitForNetwork(30000)) {
-    Serial.println("❌ Kein Netz");
-    return;
-  }
-  if (!modem.gprsConnect(apn, user, pass)) {
-    Serial.println("❌ LTE-Verbindung fehlgeschlagen");
+  if (!modem.waitForNetwork(30000) || !modem.gprsConnect(APN, USER, PASS)) {
+    Serial.println("❌ LTE fehlgeschlagen");
     return;
   }
   Serial.println("✅ LTE verbunden!");
-  Serial.print("IP: "); Serial.println(modem.localIP());
 
-  // 4️⃣ HTTP-Test – Standort senden
-  TinyGsmClient client(modem);
-  if (client.connect(host, port)) {
-    Serial.println("Sende Standort...");
-    String url = "/get?lat=" + latitude + "&lon=" + longitude;
-    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                 "Host: " + host + "\r\n" +
-                 "Connection: close\r\n\r\n");
+  // JSON vorbereiten
+  String json = String("{\"lat\":") + latitude + ",\"lon\":" + longitude +
+                ",\"imei\":\"" + imei + "\"}";
+
+  // HTTP-POST senden
+  Serial.println("Sende POST an Node-RED...");
+  if (client.connect(SERVER, PORT)) {
+    client.print(String("POST ") + PATH + " HTTP/1.1\r\n");
+    client.print(String("Host: ") + SERVER + "\r\n");
+    client.print("Content-Type: application/json\r\n");
+    client.print(String("X-Token: ") + TOKEN + "\r\n");
+    client.print(String("Content-Length: ") + json.length() + "\r\n");
+    client.print("Connection: close\r\n\r\n");
+    client.print(json);
+    Serial.println("✅ Gesendet:");
+    Serial.println(json);
   } else {
-    Serial.println("❌ HTTP-Verbindung fehlgeschlagen");
+    Serial.println("❌ Verbindung zu Server fehlgeschlagen");
   }
+
+  // Antwort anzeigen
+  delay(1000);
+  while (client.available()) Serial.write(client.read());
+  client.stop();
 }
 
-void loop() {
-  // nichts
-}
+void loop() {}
