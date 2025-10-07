@@ -18,6 +18,7 @@ const char TOKEN[] = "jlkdsfjhksdkf230s3490";
 
 String latitude, longitude, imei;
 
+// Warten auf "+CGNSSPWR: READY!"
 bool waitForReadyResponse(unsigned long timeoutMs)
 {
   unsigned long start = millis();
@@ -40,11 +41,59 @@ bool waitForReadyResponse(unsigned long timeoutMs)
   return false;
 }
 
+// Modem neustarten
 void restartModem()
 {
   Serial.println("🔄 Modem wird neu gestartet...");
   modem.restart();
   delay(5000);
+}
+
+// GNSSINFO-Zeile auswerten
+bool parseCGNSSInfo(String resp)
+{
+  // Beispiel: +CGNSSINFO: 3,14,,11,00,51.8838463,N,8.2499580,E,071025,...
+  int firstComma = resp.indexOf(":");
+  if (firstComma == -1)
+    return false;
+
+  // Alles nach dem ":" holen und splitten
+  String data = resp.substring(firstComma + 1);
+  data.trim();
+
+  // Felder trennen
+  int fieldIndex = 0;
+  int lastPos = 0;
+  String fields[20];
+
+  for (int i = 0; i < data.length(); i++)
+  {
+    if (data[i] == ',')
+    {
+      fields[fieldIndex++] = data.substring(lastPos, i);
+      lastPos = i + 1;
+      if (fieldIndex >= 19)
+        break;
+    }
+  }
+  fields[fieldIndex] = data.substring(lastPos);
+
+  // In diesem Format:
+  // [0]=3 [1]=14 [2]= (leer) [3]=11 [4]=00 [5]=51.8838463 [6]=N [7]=8.2499580 [8]=E ...
+  if (fields[5].length() > 0 && fields[7].length() > 0)
+  {
+    latitude = fields[5];
+    if (fields[6] == "S")
+      latitude = "-" + latitude;
+    longitude = fields[7];
+    if (fields[8] == "W")
+      longitude = "-" + longitude;
+    Serial.printf("📍 Geparst: Lat=%s, Lon=%s\n", latitude.c_str(), longitude.c_str());
+    return true;
+  }
+
+  Serial.println("⚠️ Konnte Koordinaten nicht auswerten.");
+  return false;
 }
 
 void setup()
@@ -81,7 +130,7 @@ void setup()
     }
   }
 
-  // GNSSS Ausgabe starten
+  // GNSS-Ausgabe starten
   SerialAT.println("AT+CGNSSTST=1");
   delay(500);
 
@@ -96,25 +145,32 @@ void setup()
   Serial.println("Warte auf GNSS-Fix...");
   unsigned long start = millis();
   bool gotFix = false;
+
   while (millis() - start < 200000)
   { // 200 Sekunden
     SerialAT.println("AT+CGNSSINFO");
     delay(1000);
+
     if (SerialAT.available())
     {
       String resp = SerialAT.readString();
       Serial.println(resp);
-      if (resp.indexOf("+CGNSSINFO:") >= 0 && resp.indexOf(",N,") > 0)
+
+      if (resp.indexOf("+CGNSSINFO:") >= 0)
       {
-        Serial.println("✅ GNSS-Fix gefunden!");
-        int a = resp.indexOf(",") + 1;    // Skip first field
-        int b = resp.indexOf(",", a + 1); // Längenfeld
-        latitude = resp.substring(a, b);
-        int c = resp.indexOf(",", b + 1);
-        longitude = resp.substring(b + 1, c);
-        gotFix = true;
-        break;
+        if (parseCGNSSInfo(resp))
+        {
+          Serial.println("✅ GNSS-Fix gefunden!");
+          gotFix = true;
+          break;
+        }
       }
+    }
+    else
+    {
+      // GNSS-Ausgabe starten
+      SerialAT.println("AT+CGNSSTST=1");
+      delay(1000);
     }
   }
 
