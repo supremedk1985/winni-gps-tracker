@@ -174,7 +174,7 @@ void setup()
     {
       break; // Erfolgreich
     }
-    else if (attempt == 2)
+    else if (attempt <= 2)
     {
       restartModem();
     }
