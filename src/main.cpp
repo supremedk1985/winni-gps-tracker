@@ -18,6 +18,12 @@ const char TOKEN[] = "jlkdsfjhksdkf230s3490";
 
 String latitude, longitude, imei;
 
+
+void handleNoChanceError(){
+  Serial.println("❌❌❌ DAS HAT NICHT GEKLAPPT! DEN SELBEN SONG NOCHMAL! ❌❌❌");
+  ESP.restart();
+}
+
 // Warten auf "+CGNSSPWR: READY!"
 bool waitForReadyResponse(unsigned long timeoutMs)
 {
@@ -160,7 +166,7 @@ void setup()
   modem.restart();
 
   // GNSS einschalten
-  for (int attempt = 1; attempt <= 2; attempt++)
+  for (int attempt = 1; attempt <= 3; attempt++)
   {
     Serial.printf("🔹 GNSS einschalten (Versuch %d)\n", attempt);
     SerialAT.println("AT+CGNSSPWR=1");
@@ -168,13 +174,14 @@ void setup()
     {
       break; // Erfolgreich
     }
-    else if (attempt == 1)
+    else if (attempt == 2)
     {
       restartModem();
     }
     else
     {
-      Serial.println("❌ GNSS konnte nicht aktiviert werden.");
+      Serial.println("❌ GNSS konnte nicht aktiviert werden. Starte neu");
+      handleNoChanceError();
     }
   }
 
@@ -233,7 +240,7 @@ void setup()
   if (!gotValidFix)
   {
     Serial.println("⛔ Kein valider Fix — es wird NICHT an Node-RED gesendet.");
-    return; // <<— Ende: Kein Senden ohne validen Fix
+    handleNoChanceError();
   }
 
   // LTE verbinden (nur wenn valider Fix)
@@ -241,7 +248,7 @@ void setup()
   if (!modem.waitForNetwork(30000) || !modem.gprsConnect(APN, USER, PASS))
   {
     Serial.println("❌ LTE fehlgeschlagen — es wird NICHT gesendet.");
-    return;
+    handleNoChanceError();
   }
   Serial.println("✅ LTE verbunden!");
 
@@ -266,6 +273,7 @@ void setup()
   else
   {
     Serial.println("❌ Verbindung zu Server fehlgeschlagen");
+    handleNoChanceError();
   }
 
   // Antwort anzeigen
