@@ -165,62 +165,41 @@ bool parseClbs(const String &clbs, String &lat, String &lon)
 }
 
 // ==================== GNSS Parser (robust) ====================
-// Extrahiert lat/lon aus +CGNSSINFO per Marker ",N,"/ ",S," und ",E,"/ ",W,"
-// Wandelt ddmm.mmmm -> dezimalgrad
-bool parseCgnssInfo(const String &resp, double &latDeg, double &lonDeg)
-{
-  int nPos = resp.indexOf(",N,");
-  int sPos = resp.indexOf(",S,");
-  int latMarker = (nPos >= 0) ? nPos : sPos;
-  if (latMarker < 0)
-    return false; // kein Lat-Block
+bool parseCgnssInfo(const String& resp, double& latDeg, double& lonDeg) {
+  int latStart = resp.indexOf(",") + 1;
+  // Finde das erste Vorkommen von ,N, oder ,S,
+  int nMark = resp.indexOf(",N,");
+  int sMark = resp.indexOf(",S,");
+  int latEnd = (nMark >= 0) ? nMark : sMark;
+  if (latEnd < 0) return false;
 
-  // Latitude-Token: zwischen letztem Komma vor Marker und Marker
-  int latCommaPrev = resp.lastIndexOf(',', latMarker - 1);
-  if (latCommaPrev < 0)
-    return false;
-  String latTok = resp.substring(latCommaPrev + 1, latMarker);
+  // Hole Latitude
+  int latCommaPrev = resp.lastIndexOf(',', latEnd - 1);
+  String latTok = resp.substring(latCommaPrev + 1, latEnd);
   latTok.trim();
 
-  // Longitude-Token: nach Marker bis vor ,E, oder ,W,
-  int ePos = resp.indexOf(",E,", latMarker + 3);
-  int wPos = resp.indexOf(",W,", latMarker + 3);
-  int lonMarker = (ePos >= 0) ? ePos : wPos;
-  if (lonMarker < 0)
-    return false;
+  // Nach ,N, oder ,S, kommt Longitude-Block bis zum nächsten ,E, oder ,W,
+  int eMark = resp.indexOf(",E,", latEnd + 3);
+  int wMark = resp.indexOf(",W,", latEnd + 3);
+  int lonEnd = (eMark >= 0) ? eMark : wMark;
+  if (lonEnd < 0) return false;
 
-  int lonCommaPrev = resp.lastIndexOf(',', lonMarker - 1);
-  if (lonCommaPrev < 0)
-    return false;
-  String lonTok = resp.substring(lonCommaPrev + 1, lonMarker);
+  int lonCommaPrev = resp.lastIndexOf(',', lonEnd - 1);
+  String lonTok = resp.substring(lonCommaPrev + 1, lonEnd);
   lonTok.trim();
 
-  auto ddmm_to_deg = [](const String &t, bool isLat) -> double
-  {
-    // lat: 2 deg, lon: 3 deg
-    int d = isLat ? 2 : 3;
-    if ((int)t.length() < d + 1)
-      return NAN;
-    String degStr = t.substring(0, d);
-    String minStr = t.substring(d);
-    double deg = degStr.toInt();
-    double mins = minStr.toFloat();
-    return deg + (mins / 60.0);
-  };
+  bool south = (sMark >= 0);
+  bool west = (wMark >= 0);
 
-  bool latSouth = (sPos >= 0);
-  bool lonWest = (wPos >= 0);
+  latDeg = latTok.toDouble();
+  lonDeg = lonTok.toDouble();
 
-  latDeg = ddmm_to_deg(latTok, true);
-  lonDeg = ddmm_to_deg(lonTok, false);
-  if (isnan(latDeg) || isnan(lonDeg))
-    return false;
-  if (latSouth)
-    latDeg = -latDeg;
-  if (lonWest)
-    lonDeg = -lonDeg;
-  return true;
+  if (south) latDeg = -latDeg;
+  if (west)  lonDeg = -lonDeg;
+
+  return !(isnan(latDeg) || isnan(lonDeg));
 }
+
 
 // ==================== GPS Handler ====================
 String getGPS()
