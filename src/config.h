@@ -10,7 +10,10 @@
 
 // === TELEGRAM BOT ===
 // Hol dir deinen Token von @BotFather in Telegram
-#define BOT_TOKEN "DEIN_BOT_TOKEN_HIER"
+#define BOT_TOKEN "8432305875:AAHc0YuvoORlJRriOhcV16yOSymZtxvOSuc"
+#define CHAT_ID  "1800609959"
+
+#define GNNS_MAX_RETRIES 30  // Max. Versuche für GNSS Fix
 
 // === SIM KARTE / MOBILFUNK ===
 // APN Einstellungen für Deutschland:
