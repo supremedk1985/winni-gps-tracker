@@ -4,39 +4,13 @@
 #include "gnss_onboard.h"
 #include "storage.h"
 #include "config.h"
+#include "utils.h"
 #include <ArduinoJson.h>
 
 long lastUpdateId = 0;
 bool gpsBusy = false;
 
-String urlEncode(const String &s)
-{
-  String encoded = "";
-  char c;
-  char bufHex[4];
-  for (int i = 0; i < s.length(); i++)
-  {
-    c = s.charAt(i);
-    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
-    {
-      encoded += c;
-    }
-    else if (c == ' ')
-    {
-      encoded += "%20";
-    }
-    else if (c == '\n')
-    {
-      encoded += "%0A"; // Zeilenumbruch
-    }
-    else
-    {
-      snprintf(bufHex, sizeof(bufHex), "%%%02X", (unsigned char)c);
-      encoded += bufHex;
-    }
-  }
-  return encoded;
-}
+
 
 // ==================== Telegram Send ====================
 void sendMessage(String text)
@@ -45,7 +19,10 @@ void sendMessage(String text)
 
   String url = String("https://api.telegram.org/bot") + BOT_TOKEN +
                "/sendMessage?chat_id=" + CHAT_ID +
-               "&parse_mode=Markdown&text=" + encodedText;
+               "&parse_mode=HTML&text=" + encodedText;
+
+Serial.println("Sende Telegram Nachricht:");
+Serial.println(url);
 
   sendAT("AT+HTTPTERM", 1500);
   sendAT("AT+HTTPINIT", 3000);
