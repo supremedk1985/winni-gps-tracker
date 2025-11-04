@@ -26,13 +26,10 @@ String sendAT(String cmd, unsigned long timeout)
 String httpGet(String url)
 {
   String result;
-  while (modem.available())
-    modem.read();
+  while (modem.available()) modem.read();
 
-  modem.print("AT+HTTPPARA=\"URL\",\"");
-  modem.print(url);
-  modem.println("\"");
-  delay(500);
+  modem.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
+  delay(300);
   modem.println("AT+HTTPACTION=0");
 
   String line;
@@ -48,42 +45,51 @@ String httpGet(String url)
         if (line.indexOf("+HTTPACTION:") >= 0)
         {
           int p2 = line.lastIndexOf(',');
-          if (p2 > 0)
-            contentLen = line.substring(p2 + 1).toInt();
+          if (p2 > 0) contentLen = line.substring(p2 + 1).toInt();
+          line = "";
           goto got_len;
         }
         line = "";
-      }
-      else line += c;
+      } else line += c;
     }
   }
 got_len:
-  if (contentLen < 0) contentLen = 0;
-  delay(800);
+  if (contentLen <= 0) return "";
 
-  int offset = 0;
-  while (offset < contentLen)
+  delay(500);
+  modem.printf("AT+HTTPREAD=0,%d\r\n", contentLen);
+
+  String body = "";
+  bool readStarted = false;
+  unsigned long t1 = millis();
+
+  while (millis() - t1 < 5000)
   {
-    int block = min(512, contentLen - offset);
-    modem.print("AT+HTTPREAD=");
-    modem.print(offset);
-    modem.print(",");
-    modem.println(block);
-    delay(300);
-
-    unsigned long t1 = millis();
-    while (millis() - t1 < 3000)
+    while (modem.available())
     {
-      while (modem.available())
-        result += (char)modem.read();
+      char c = modem.read();
+
+      // Start erst nach dem ersten '{'
+      if (!readStarted)
+      {
+        if (c == '{') { readStarted = true; body += c; }
+      }
+      else
+      {
+        body += c;
+      }
     }
-    offset += block;
   }
 
-  Serial.println("---- HTTPREAD Antwort ----");
-  Serial.println(result);
-  Serial.println("---------------------------");
-  return result;
+  // Alles nach der letzten '}' abschneiden
+  int lastBrace = body.lastIndexOf('}');
+  if (lastBrace > 0)
+    body = body.substring(0, lastBrace + 1);
+
+  Serial.println("---- HTTPREAD Antwort (bereinigt) ----");
+  Serial.println(body);
+  Serial.println("--------------------------------------");
+  return body;
 }
 
 // ==================== Modem Setup ====================

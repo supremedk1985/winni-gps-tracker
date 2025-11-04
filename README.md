@@ -1,5 +1,8 @@
+<img src="docs/images/esp32s3a7670e4g_waveshare.png" style="width:100px;align:center" />
 # Winni GPS Tracker — ESP32-S3 (Waveshare) + A7670E  
 **Modulares PlatformIO-Projekt für Wohnmobile, Wohnwagen und Fahrzeuge ohne Abo**
+
+
 
 Der Winni GPS Tracker ist ein eigenständiger, Cloud-freier Fahrzeug-Tracker auf Basis des **ESP32-S3-A7670E-4G** Moduls.  
 Er nutzt eine **Daten-SIM-Karte** (keine SMS notwendig) und sendet Positionsdaten über das Mobilfunknetz an einen **Telegram-Bot**.  
