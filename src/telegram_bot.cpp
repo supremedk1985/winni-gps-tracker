@@ -47,16 +47,19 @@ void checkTelegram()
   }
 
   JsonArray results = doc["result"];
-  if (results.isNull() || results.size() == 0) return;
+  if (results.isNull() || results.size() == 0)
+    return;
 
   for (JsonObject upd : results)
   {
     long updateId = upd["update_id"] | 0;
-    if (updateId <= lastUpdateId) continue;
+    if (updateId <= lastUpdateId)
+      continue;
     lastUpdateId = updateId;
 
     JsonObject msg = upd["message"];
-    if (msg.isNull() || msg["from"]["is_bot"]) continue;
+    if (msg.isNull() || msg["from"]["is_bot"])
+      continue;
 
     String cmd = String((const char *)(msg["text"] | ""));
     cmd.toLowerCase();
@@ -64,11 +67,12 @@ void checkTelegram()
     Serial.print("Empfangen: ");
     Serial.println(cmd);
 
-    if (cmd == "/info" || cmd == "info"){
+    if (cmd == "/info" || cmd == "info")
+    {
       String sig = getSignalQuality();
-    uint64_t sizeMB = getCardSizeMB();
-    String sdInfo = (sizeMB > 0) ? "SD: " + String(sizeMB) + " MB" : "SD: nicht verfügbar";
-    sendMessage(sig + " | " + sdInfo);
+      uint64_t sizeMB = getCardSizeMB();
+      String sdInfo = (sizeMB > 0) ? "SD: " + String(sizeMB) + " MB" : "SD: nicht verfügbar";
+      sendMessage(sig + " | " + sdInfo);
     }
     else if (cmd == "/gps" || cmd == "gps")
     {
