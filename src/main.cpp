@@ -1,5 +1,7 @@
 #include <HardwareSerial.h>
 #include <ArduinoJson.h>
+#include "settings.h"
+
 #include "config.h"
 
 HardwareSerial modem(1);

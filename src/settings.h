@@ -1,28 +1,7 @@
-/**
- * Konfigurationsdatei für ESP32 LTE Telegram Bot
- * 
- * WICHTIG: Kopiere diese Datei nach "config.h" und füge deine 
- * echten Zugangsdaten ein.
- */
-
-#ifndef CONFIG_H
-#define CONFIG_H
-
-// === TELEGRAM BOT ===
-// Hol dir deinen Token von @BotFather in Telegram
-#define BOT_TOKEN "BOT_TOKEN_HERE"
-#define CHAT_ID  "CHAT_ID_HERE"
+#ifndef SETTINGS_H
+#define SETTINGS_H
 
 #define GNNS_MAX_RETRIES 30  // Max. Versuche für GNSS Fix
-
-// === SIM KARTE / MOBILFUNK ===
-// APN Einstellungen für Deutschland:
-// O2: "internet"
-// Vodafone: "web.vodafone.de"
-// Telekom: "internet.t-mobile"
-#define APN      "internet"
-#define APN_USER ""
-#define APN_PASS ""
 
 // === PINS (Standard für Waveshare Board) ===
 #define RGB_PIN     38
@@ -57,8 +36,4 @@
 #define SERIAL_BAUD       115200 // Serial Monitor Baudrate
 #define AT_BAUD           115200 // Modem UART Baudrate
 
-// === DEBUG ===
-#define DEBUG_MODE        true   // Aktiviert Debug-Ausgaben
-#define DEBUG_AT_COMMANDS false  // Zeigt AT-Kommandos im Serial Monitor
-
-#endif // CONFIG_H
+#endif // SETTINGS_H
