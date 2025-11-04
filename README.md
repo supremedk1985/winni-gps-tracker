@@ -1,35 +1,45 @@
-# Winni GPS — ESP32-S3 (Waveshare) + A7670E — Modular PlatformIO Project 
-WIP
+# Winni GPS Tracker — ESP32-S3 (Waveshare) + A7670E  
+**Modulares PlatformIO-Projekt für Wohnmobile, Wohnwagen und Fahrzeuge ohne Abo**
 
-Inhalt config_h:
-<code>
-**
- * Konfigurationsdatei für Winni-GPS-Tracker
- * 
- * WICHTIG: Kopiere diese Datei nach "config.h" und füge deine 
- * echten Zugangsdaten ein. (Änderer EXAMPLE_CONFIG_H in CONFIG_H)
- */
+Der Winni GPS Tracker ist ein eigenständiger, Cloud-freier Fahrzeug-Tracker auf Basis des **ESP32-S3-A7670E-4G** Moduls.  
+Er nutzt eine **Daten-SIM-Karte** (keine SMS notwendig) und sendet Positionsdaten über das Mobilfunknetz an einen **Telegram-Bot**.  
+Optional kann eine **18650 Li-Ion-Batterie** angeschlossen werden, um das System autark zu betreiben.
 
-#ifndef EXAMPLE_CONFIG_H
-#define EXAMPLE_CONFIG_H
+---
 
-// === TELEGRAM BOT ===
-// Hol dir deinen Token von @BotFather in Telegram
-#define BOT_TOKEN "BOT_TOKEN_HERE"
-#define CHAT_ID  "CHAT_ID_HERE"
+## ⚙️ Hardwareanforderungen
 
-// === SIM KARTE / MOBILFUNK ===
-// APN Einstellungen für Deutschland:
-// O2: "internet"
-// Vodafone: "web.vodafone.de"
-// Telekom: "internet.t-mobile"
-#define APN      ""
-#define APN_USER ""
-#define APN_PASS ""
+- **ESP32-S3-A7670E-4G Modul (Waveshare)**  
+- **Nano-SIM Karte mit Datentarif**  
+- **Optional:**  
+  - 18650 Li-Ion-Akku  
+  - Externes **NEO-6M GPS-Modul** (empfohlen)  
+    > Das interne GNSS-Modul teilt sich die Leitung mit dem LTE-Modem.  
+    > Daher ist gleichzeitiges Empfangen von GPS-Daten und Telegram-Kommunikation nicht möglich.
 
-// === DEBUG ===
-#define DEBUG_MODE        true   // Aktiviert Debug-Ausgaben
-#define DEBUG_AT_COMMANDS false  // Zeigt AT-Kommandos im Serial Monitor
+---
 
-#endif // CONFIG_H
-</code>
+## 💬 Telegram-Befehle
+
+| Befehl | Beschreibung |
+|:-------|:--------------|
+| `/info` | Zeigt die aktuelle Signalstärke der Mobilfunkverbindung. |
+| `/gps`  | Ermittelt zunächst eine ungefähre Position über LTE und versucht anschließend, einen GNSS-Fix zu erhalten. |
+
+---
+
+## 🧩 Geplante Erweiterungen (TODO)
+
+- Geofencing (Benachrichtigung bei Verlassen eines definierten Bereichs)  
+- Speicherung von Standortdaten auf SD-Karte  
+- Aufnahme und Versand eines Kamerabilds  
+
+---
+
+## 🔧 Konfiguration
+
+Vor der ersten Nutzung muss die Datei **`example_config.h`** kopiert und angepasst werden.
+
+1. Kopiere:
+   ```bash
+   cp src/example_config.h src/config.h
