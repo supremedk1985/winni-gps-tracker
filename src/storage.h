@@ -5,13 +5,13 @@
 #include <FS.h>
 #include <SD_MMC.h>
 
-// Initialisiert SD-Karte, gibt true bei Erfolg zurück
+// SD-Karteninitialisierung (wie im Testscript)
 bool initStorage();
 
-// Liefert Größe der SD-Karte in MB (oder 0 bei Fehler)
+// Gibt Kartengröße in MB zurück (0 bei Fehler)
 uint64_t getCardSizeMB();
 
-// Listet Verzeichnisinhalt (rekursiv falls levels > 0)
+// Optional: Verzeichnisinhalt ausgeben
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels = 0);
 
 #endif
