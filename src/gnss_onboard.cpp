@@ -9,55 +9,123 @@ extern bool gpsBusy;
 extern String sendAT(String cmd, unsigned long timeout);
 extern void sendMessage(String text);
 
-bool parseClbs(const String &clbs, String &lat, String &lon) {
+bool parseClbs(const String &clbs, String &lat, String &lon)
+{
   int idx = clbs.indexOf("+CLBS:");
-  if (idx < 0) return false;
+  if (idx < 0)
+    return false;
   String line = clbs.substring(idx);
-  line.replace("\r", ""); line.replace("\n", ""); line.trim();
+  line.replace("\r", "");
+  line.replace("\n", "");
+  line.trim();
   int p1 = line.indexOf(',');
   int p2 = line.indexOf(',', p1 + 1);
   int p3 = line.indexOf(',', p2 + 1);
-  if (p1 < 0 || p2 < 0 || p3 < 0) return false;
-  String status = line.substring(7, p1); status.trim();
-  if (status != "0") return false;
+  if (p1 < 0 || p2 < 0 || p3 < 0)
+    return false;
+  String status = line.substring(7, p1);
+  status.trim();
+  if (status != "0")
+    return false;
   lat = line.substring(p1 + 1, p2);
   lon = line.substring(p2 + 1, p3);
   return (lat.length() > 4 && lon.length() > 4);
 }
 
-bool parseCgnssInfo(const String &resp, double &latDeg, double &lonDeg) {
-  int latStart = resp.indexOf(",") + 1;
-  int nMark = resp.indexOf(",N,");
-  int sMark = resp.indexOf(",S,");
-  int latEnd = (nMark >= 0) ? nMark : sMark;
-  if (latEnd < 0) return false;
-  int latCommaPrev = resp.lastIndexOf(',', latEnd - 1);
-  String latTok = resp.substring(latCommaPrev + 1, latEnd);
-  latTok.trim();
 
-  int eMark = resp.indexOf(",E,", latEnd + 3);
-  int wMark = resp.indexOf(",W,", latEnd + 3);
-  int lonEnd = (eMark >= 0) ? eMark : wMark;
-  if (lonEnd < 0) return false;
+bool parseCgnssInfo(const String &resp, GNSSInfo &info)
+{
+  info = GNSSInfo();  // reset
+  info.valid = false;
 
-  int lonCommaPrev = resp.lastIndexOf(',', lonEnd - 1);
-  String lonTok = resp.substring(lonCommaPrev + 1, lonEnd);
-  lonTok.trim();
+  int p = resp.indexOf("+CGNSSINFO:");
+  if (p < 0) return false;
 
-  bool south = (sMark >= 0);
-  bool west = (wMark >= 0);
+  // Payload ausschneiden und normalisieren
+  String s = resp.substring(p + 12);
+  s.replace("\r", "");
+  s.replace("\n", "");
+  s.trim();
 
-  latDeg = latTok.toDouble();
-  lonDeg = lonTok.toDouble();
+  // Tokenize
+  const int MAXTOK = 40;
+  String t[MAXTOK];
+  int n = 0;
+  int start = 0;
+  while (n < MAXTOK) {
+    int c = s.indexOf(',', start);
+    if (c < 0) { t[n++] = s.substring(start); break; }
+    t[n++] = s.substring(start, c);
+    start = c + 1;
+  }
+  if (n < 6) return false;
 
-  if (south) latDeg = -latDeg;
-  if (west) lonDeg = -lonDeg;
+  // Anker finden: N/S und E/W
+  int idxNS = -1, idxEW = -1;
+  for (int i = 0; i < n; i++) {
+    if (t[i] == "N" || t[i] == "S") idxNS = i;
+    if (t[i] == "E" || t[i] == "W") { idxEW = i; break; }
+  }
+  if (idxNS < 1 || idxEW < 1) return false;
 
-  return !(isnan(latDeg) || isnan(lonDeg));
+  // Lat/Lon lesen (bereits in Dezimalgrad in deinem Beispiel)
+  double lat = t[idxNS - 1].toDouble();
+  double lon = t[idxEW - 1].toDouble();
+  if (t[idxNS] == "S") lat = -lat;
+  if (t[idxEW] == "W") lon = -lon;
+
+  if (isnan(lat) || isnan(lon)) return false;
+
+  info.latDeg = lat;
+  info.lonDeg = lon;
+
+  // Nach E/W: erwartete Reihenfolge (best effort)
+  // Beispiel: ..., E, 041125, 183613.00, 134.3, 2.020, , 5.79, 4.05, 4.14, 06
+  int i = idxEW + 1;
+
+  // Datum
+  if (i < n && t[i].length()) { info.utcDate = t[i++]; }
+  // Zeit
+  if (i < n && t[i].length()) { info.utcDate += " " + t[i++]; }
+
+  // Höhe
+  if (i < n && t[i].length()) info.altitude = t[i++].toDouble();
+
+  // Speed
+  if (i < n && t[i].length()) info.speed = t[i++].toDouble();
+
+  // Kurs optional
+  if (i < n && t[i].length()) {
+    // Manche Module setzen hier leer -> überspringen
+    double v = t[i].toDouble();
+    if (!(t[i].length() == 0 || (t[i] == "0" && t[i].length()==0))) info.course = v;
+    i++;
+  }
+
+  // HDOP suchen: nimm erstes nicht-leeres numerisches Feld ab hier
+  while (i < n && t[i].length() == 0) i++;
+  if (i < n && t[i].length()) { info.hdop = t[i++].toDouble(); }
+
+  // SatsUsed als letztes ganzzahliges Feld, wenn vorhanden
+  for (int k = n - 1; k >= 0; k--) {
+    bool allDigits = true;
+    for (size_t j = 0; j < t[k].length(); j++) {
+      if (!isDigit(t[k][j])) { allDigits = false; break; }
+    }
+    if (allDigits && t[k].length() > 0) { info.satsUsed = t[k].toInt(); break; }
+  }
+
+  // Fix-Mode heuristisch: Höhe gültig ⇒ 3D, sonst 2D
+  info.fixMode = !isnan(info.altitude) ? 2 : 1; // 2=3D, 1=2D in deiner Semantik
+  info.valid = true;
+  return true;
 }
 
-String getGPS() {
-  if (gpsBusy) return "GNSS läuft bereits.";
+
+String getGPS()
+{
+  if (gpsBusy)
+    return "GNSS läuft bereits.";
   gpsBusy = true;
 
   sendMessage("Okay, hole GPS. Melde mich dann zurück...");
@@ -66,9 +134,15 @@ String getGPS() {
   String clbs = sendAT("AT+CLBS=1,1", 12000);
   String lteMsg = "LTE-Standort nicht verfügbar.";
   String latS, lonS;
-  if (parseClbs(clbs, latS, lonS)) {
-    lteMsg = "Vorlaeufiger Standort (LTE): " + latS + "," + lonS +
-             " https://maps.google.com/?q=" + latS + "," + lonS;
+  bool ok = parseClbs(clbs, latS, lonS);
+  if (ok)
+  {
+    lteMsg = String("📍 *Vorläufiger Standort (LTE)*\n") +
+             "🌐 [" + latS + ", " + lonS + "](https://maps.google.com/?q=" + latS + "," + lonS + ")";
+  }
+  else
+  {
+    lteMsg = "📡 LTE-Standort nicht verfügbar.";
   }
   sendMessage(lteMsg);
 
@@ -77,15 +151,18 @@ String getGPS() {
   sendAT("AT+CGNSSPWR=1", 4000);
 
   bool ready = false;
-  for (int i = 0; i < 30; i++) {
+  for (int i = 0; i < 30; i++)
+  {
     String rdy = sendAT("AT+CGNSSINFO", 2500);
-    if (rdy.indexOf("+CGNSSINFO:") >= 0) {
+    if (rdy.indexOf("+CGNSSINFO:") >= 0)
+    {
       ready = true;
       break;
     }
     delay(3000);
   }
-  if (!ready) {
+  if (!ready)
+  {
     sendMessage("GNSS nicht erreichbar. Verwende LTE-Position.");
     sendAT("AT+CGNSSPWR=0", 2000);
     sendAT("AT+CGATT=1", 5000);
@@ -93,12 +170,14 @@ String getGPS() {
     gpsBusy = false;
     return lteMsg;
   }
+  GNSSInfo gnss;
 
-  double latDeg = NAN, lonDeg = NAN;
   bool fix = false;
-  for (int i = 0; i < GNNS_MAX_RETRIES; i++) {
+  for (int i = 0; i < GNNS_MAX_RETRIES; i++)
+  {
     String resp = sendAT("AT+CGNSSINFO", 3000);
-    if (parseCgnssInfo(resp, latDeg, lonDeg)) {
+    if (parseCgnssInfo(resp, gnss) && gnss.valid)
+    {
       fix = true;
       break;
     }
@@ -106,13 +185,24 @@ String getGPS() {
   }
 
   String msg;
-  if (fix) {
-    String slat = String(latDeg, 6);
-    String slon = String(lonDeg, 6);
-    msg = "GNSS Fix: " + slat + "," + slon +
-          " https://maps.google.com/?q=" + slat + "," + slon;
-  } else {
-    msg = "Kein GNSS Fix nach Timeout. Verwende LTE-Daten.";
+  if (fix)
+  {
+    String slat = String(gnss.latDeg, 6);
+    String slon = String(gnss.lonDeg, 6);
+
+    msg = "📡 *GNSS Fix erhalten*\n";
+    msg += "🧭 " + String(gnss.fixMode) + "D Fix | ";
+    msg += String(gnss.satsUsed) + "/" + String(gnss.satsInView) + " Satelliten\n";
+    msg += "📍 [" + slat + ", " + slon + "](https://maps.google.com/?q=" + slat + "," + slon + ")\n";
+    msg += "⛰️ " + String(gnss.altitude, 1) + " m | ";
+    msg += "🎯 " + String(gnss.hdop, 1) + " HDOP\n";
+    msg += "🚗 " + String(gnss.speed, 1) + " km/h | ";
+    msg += "🧭 Kurs " + String(gnss.course, 1) + "°\n";
+    msg += "🕓 UTC: " + gnss.utcDate;
+  }
+  else
+  {
+    msg = "⚠️ Kein GNSS Fix nach Timeout.\nVerwende LTE-Daten.";
   }
 
   sendAT("AT+CGNSSPWR=0", 2000);

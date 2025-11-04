@@ -5,11 +5,13 @@ Der Winni GPS Tracker ist ein eigenständiger, Cloud-freier Fahrzeug-Tracker auf
 Er nutzt eine **Daten-SIM-Karte** (keine SMS notwendig) und sendet Positionsdaten über das Mobilfunknetz an einen **Telegram-Bot**.  
 Optional kann eine **18650 Li-Ion-Batterie** angeschlossen werden, um das System autark zu betreiben.
 
+Benötigt wird eine Telegram Account um die Verbindung zum Winni GPS Tracker herzustellen.
+
 ---
 
 ## ⚙️ Hardwareanforderungen
 
-- **ESP32-S3-A7670E-4G Modul (Waveshare)**  
+- **ESP32-S3-A7670E-4G Modul (Waveshare)** (https://www.waveshare.com/wiki/ESP32-S3-A7670E-4G)  
 - **Nano-SIM Karte mit Datentarif**  
 - **Optional:**  
   - 18650 Li-Ion-Akku  
