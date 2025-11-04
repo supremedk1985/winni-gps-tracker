@@ -11,7 +11,9 @@ Benötigt wird eine Telegram Account um die Verbindung zum Winni GPS Tracker her
 
 ## ⚙️ Hardwareanforderungen
 
+<img src="docs/images/esp32s3a7670e4g_waveshare.png" />
 - **ESP32-S3-A7670E-4G Modul (Waveshare)** (https://www.waveshare.com/wiki/ESP32-S3-A7670E-4G)  
+
 - **Nano-SIM Karte mit Datentarif**  
 - **Optional:**  
   - 18650 Li-Ion-Akku  

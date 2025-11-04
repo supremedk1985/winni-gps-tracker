@@ -1,6 +1,7 @@
 #include "gnss_onboard.h"
 #include "settings.h"
 #include "config.h"
+#include "utils.h"
 #include <HardwareSerial.h>
 
 extern HardwareSerial modem;
@@ -32,95 +33,125 @@ bool parseClbs(const String &clbs, String &lat, String &lon)
   return (lat.length() > 4 && lon.length() > 4);
 }
 
-
 bool parseCgnssInfo(const String &resp, GNSSInfo &info)
 {
-  info = GNSSInfo();  // reset
+  info = GNSSInfo();
   info.valid = false;
 
   int p = resp.indexOf("+CGNSSINFO:");
-  if (p < 0) return false;
+  if (p < 0)
+    return false;
 
-  // Payload ausschneiden und normalisieren
   String s = resp.substring(p + 12);
   s.replace("\r", "");
   s.replace("\n", "");
   s.trim();
 
-  // Tokenize
-  const int MAXTOK = 40;
+  // Tokenize ohne STL
+  const int MAXTOK = 48;
   String t[MAXTOK];
-  int n = 0;
-  int start = 0;
-  while (n < MAXTOK) {
+  int n = 0, start = 0;
+  while (n < MAXTOK)
+  {
     int c = s.indexOf(',', start);
-    if (c < 0) { t[n++] = s.substring(start); break; }
+    if (c < 0)
+    {
+      t[n++] = s.substring(start);
+      break;
+    }
     t[n++] = s.substring(start, c);
     start = c + 1;
   }
-  if (n < 6) return false;
+  if (n < 12)
+    return false;
 
-  // Anker finden: N/S und E/W
+  // Anker finden
   int idxNS = -1, idxEW = -1;
-  for (int i = 0; i < n; i++) {
-    if (t[i] == "N" || t[i] == "S") idxNS = i;
-    if (t[i] == "E" || t[i] == "W") { idxEW = i; break; }
+  for (int i = 0; i < n; ++i)
+  {
+    if (t[i] == "N" || t[i] == "S")
+      idxNS = i;
+    if (t[i] == "E" || t[i] == "W")
+    {
+      idxEW = i;
+      break;
+    }
   }
-  if (idxNS < 1 || idxEW < 1) return false;
+  if (idxNS < 1 || idxEW < 1)
+    return false;
 
-  // Lat/Lon lesen (bereits in Dezimalgrad in deinem Beispiel)
+  // Fix-Mode ist immer am Anfang
+  int fixModeRaw = t[0].toInt(); // 2=2D, 3=3D (SIMCom)
+  info.fixMode = fixModeRaw;
+
+  // Satelliten-Zähler vor der Latitude aufsummieren (GPS, GLONASS, BEIDOU, evtl. QZSS)
+  int satsInView = 0;
+  for (int i = 1; i <= idxNS - 2; ++i)
+  { // alle Felder zwischen mode und lat
+    if (t[i].length())
+      satsInView += t[i].toInt();
+  }
+  info.satsInView = satsInView;
+
+  // Latitude/Longitude (dezimale Grad in deinen Beispielen)
   double lat = t[idxNS - 1].toDouble();
   double lon = t[idxEW - 1].toDouble();
-  if (t[idxNS] == "S") lat = -lat;
-  if (t[idxEW] == "W") lon = -lon;
-
-  if (isnan(lat) || isnan(lon)) return false;
-
+  if (t[idxNS] == "S")
+    lat = -lat;
+  if (t[idxEW] == "W")
+    lon = -lon;
+  if (isnan(lat) || isnan(lon))
+    return false;
   info.latDeg = lat;
   info.lonDeg = lon;
 
-  // Nach E/W: erwartete Reihenfolge (best effort)
-  // Beispiel: ..., E, 041125, 183613.00, 134.3, 2.020, , 5.79, 4.05, 4.14, 06
+  // Felder nach E/W in fester Reihenfolge:
+  // date, time, alt(m), speed(knots), course(deg), PDOP, HDOP, VDOP, [optional: satsUsed]
   int i = idxEW + 1;
+  if (i < n)
+    info.utcDate = t[i++]; // ddmmyy
+  if (i < n && t[i].length())
+  {
+    info.utcDate += " " + t[i];
+  } // hhmmss.s
+  i++;
 
-  // Datum
-  if (i < n && t[i].length()) { info.utcDate = t[i++]; }
-  // Zeit
-  if (i < n && t[i].length()) { info.utcDate += " " + t[i++]; }
-
-  // Höhe
-  if (i < n && t[i].length()) info.altitude = t[i++].toDouble();
-
-  // Speed
-  if (i < n && t[i].length()) info.speed = t[i++].toDouble();
-
-  // Kurs optional
-  if (i < n && t[i].length()) {
-    // Manche Module setzen hier leer -> überspringen
-    double v = t[i].toDouble();
-    if (!(t[i].length() == 0 || (t[i] == "0" && t[i].length()==0))) info.course = v;
+  if (i < n && t[i].length())
+    info.altitude = t[i++].toDouble();
+  if (i < n && t[i].length())
+    info.speed = t[i++].toDouble(); // in Knoten
+  if (i < n && t[i].length())
+    info.course = t[i++].toDouble();
+  if (i < n && t[i].length()) /* PDOP */
     i++;
-  }
+  if (i < n && t[i].length())
+    info.hdop = t[i++].toDouble();
+  if (i < n && t[i].length()) /* VDOP */
+    i++;
 
-  // HDOP suchen: nimm erstes nicht-leeres numerisches Feld ab hier
-  while (i < n && t[i].length() == 0) i++;
-  if (i < n && t[i].length()) { info.hdop = t[i++].toDouble(); }
-
-  // SatsUsed als letztes ganzzahliges Feld, wenn vorhanden
-  for (int k = n - 1; k >= 0; k--) {
-    bool allDigits = true;
-    for (size_t j = 0; j < t[k].length(); j++) {
-      if (!isDigit(t[k][j])) { allDigits = false; break; }
+  // Satelliten USED: wenn letztes Feld numerisch klein ist, nutze es
+  int satsUsed = 0;
+  if (n > 0)
+  {
+    bool numeric = true;
+    for (unsigned j = 0; j < t[n - 1].length(); ++j)
+      if (!isDigit(t[n - 1][j]))
+      {
+        numeric = false;
+        break;
+      }
+    if (numeric)
+    {
+      satsUsed = t[n - 1].toInt();
+      if (satsUsed > 64)
+        satsUsed = 0; // Plausibilitätsgrenze
     }
-    if (allDigits && t[k].length() > 0) { info.satsUsed = t[k].toInt(); break; }
   }
+  info.satsUsed = satsUsed;
 
-  // Fix-Mode heuristisch: Höhe gültig ⇒ 3D, sonst 2D
-  info.fixMode = !isnan(info.altitude) ? 2 : 1; // 2=3D, 1=2D in deiner Semantik
   info.valid = true;
   return true;
 }
-
 
 String getGPS()
 {
@@ -187,18 +218,23 @@ String getGPS()
   String msg;
   if (fix)
   {
+    // nach erfolgreichem parse
     String slat = String(gnss.latDeg, 6);
     String slon = String(gnss.lonDeg, 6);
 
+    // Fix-Text
+    String fixTxt = (gnss.fixMode >= 3) ? "3D Fix" : (gnss.fixMode == 2 ? "2D Fix" : "kein Fix");
+
+    // Geschwindigkeit in km/h (1 kn = 1.852 km/h)
+    double kmh = gnss.speed * 1.852;
+
+    String msg;
     msg = "📡 *GNSS Fix erhalten*\n";
-    msg += "🧭 " + String(gnss.fixMode) + "D Fix | ";
-    msg += String(gnss.satsUsed) + "/" + String(gnss.satsInView) + " Satelliten\n";
+    msg += "🧭 " + fixTxt + " | " + String(gnss.satsUsed) + "/" + String(gnss.satsInView) + " Satelliten\n";
     msg += "📍 [" + slat + ", " + slon + "](https://maps.google.com/?q=" + slat + "," + slon + ")\n";
-    msg += "⛰️ " + String(gnss.altitude, 1) + " m | ";
-    msg += "🎯 " + String(gnss.hdop, 1) + " HDOP\n";
-    msg += "🚗 " + String(gnss.speed, 1) + " km/h | ";
-    msg += "🧭 Kurs " + String(gnss.course, 1) + "°\n";
-    msg += "🕓 UTC: " + gnss.utcDate;
+    msg += "⛰️ " + String(gnss.altitude, 1) + " m | 🎯 " + String(gnss.hdop, 2) + " HDOP\n";
+    msg += "🚗 " + String(kmh, 1) + " km/h | 🧭 Kurs " + String(gnss.course, 1) + "°\n";
+    msg += "🕓 UTC: " + fmtUTC(gnss.utcDate);
   }
   else
   {
