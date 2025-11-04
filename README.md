@@ -1,4 +1,4 @@
-<img src="docs/images/esp32s3a7670e4g_waveshare.png" style="width:100px;align:center" />
+<center><img src="docs/images/logo.png" style="width:110px" /></center>
 # Winni GPS Tracker — ESP32-S3 (Waveshare) + A7670E  
 **Modulares PlatformIO-Projekt für Wohnmobile, Wohnwagen und Fahrzeuge ohne Abo**
 
