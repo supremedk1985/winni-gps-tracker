@@ -65,7 +65,7 @@ bool parseCgnssInfo(const String &resp, GNSSInfo &info)
   if (n < 12)
     return false;
 
-  // Anker finden
+  // Indizes für N/S und E/W bestimmen
   int idxNS = -1, idxEW = -1;
   for (int i = 0; i < n; ++i)
   {
@@ -80,78 +80,61 @@ bool parseCgnssInfo(const String &resp, GNSSInfo &info)
   if (idxNS < 1 || idxEW < 1)
     return false;
 
-  // Fix-Mode ist immer am Anfang
-  int fixModeRaw = t[0].toInt(); // 2=2D, 3=3D (SIMCom)
-  info.fixMode = fixModeRaw;
+  // Fix-Mode
+  info.fixMode = t[0].toInt(); // 2=2D, 3=3D
 
-  // Satelliten-Zähler vor der Latitude aufsummieren (GPS, GLONASS, BEIDOU, evtl. QZSS)
+  // Satelliten in View (Summe aller GNSS-Systeme)
   int satsInView = 0;
   for (int i = 1; i <= idxNS - 2; ++i)
-  { // alle Felder zwischen mode und lat
+  {
     if (t[i].length())
       satsInView += t[i].toInt();
   }
   info.satsInView = satsInView;
 
-  // Latitude/Longitude (dezimale Grad in deinen Beispielen)
+  // Latitude/Longitude
   double lat = t[idxNS - 1].toDouble();
   double lon = t[idxEW - 1].toDouble();
-  if (t[idxNS] == "S")
-    lat = -lat;
-  if (t[idxEW] == "W")
-    lon = -lon;
+  if (t[idxNS] == "S") lat = -lat;
+  if (t[idxEW] == "W") lon = -lon;
   if (isnan(lat) || isnan(lon))
     return false;
   info.latDeg = lat;
   info.lonDeg = lon;
 
-  // Felder nach E/W in fester Reihenfolge:
-  // date, time, alt(m), speed(knots), course(deg), PDOP, HDOP, VDOP, [optional: satsUsed]
+  // Nach E/W: Datum, Zeit, Höhe, Geschwindigkeit, Kurs, PDOP, HDOP, VDOP, optional SatsUsed
   int i = idxEW + 1;
-  if (i < n)
-    info.utcDate = t[i++]; // ddmmyy
+  if (i < n) info.utcDate = t[i++]; // Datum
   if (i < n && t[i].length())
   {
-    info.utcDate += " " + t[i];
-  } // hhmmss.s
+    info.utcDate += " " + t[i]; // Zeit
+  }
   i++;
 
-  if (i < n && t[i].length())
-    info.altitude = t[i++].toDouble();
-  if (i < n && t[i].length())
-    info.speed = t[i++].toDouble(); // in Knoten
-  if (i < n && t[i].length())
-    info.course = t[i++].toDouble();
-  if (i < n && t[i].length()) /* PDOP */
-    i++;
-  if (i < n && t[i].length())
-    info.hdop = t[i++].toDouble();
-  if (i < n && t[i].length()) /* VDOP */
-    i++;
+  if (i < n && t[i].length()) info.altitude = t[i++].toDouble();
+  if (i < n && t[i].length()) info.speed = t[i++].toDouble();
+  if (i < n && t[i].length()) info.course = t[i++].toDouble();
+  if (i < n && t[i].length()) i++; // PDOP
+  if (i < n && t[i].length()) info.hdop = t[i++].toDouble();
+  if (i < n && t[i].length()) i++; // VDOP
 
-  // Satelliten USED: wenn letztes Feld numerisch klein ist, nutze es
+  // Prüfe, ob nach VDOP noch ein Feld für SatsUsed kommt
   int satsUsed = 0;
-  if (n > 0)
+  if (i < n && t[i].length())
   {
-    bool numeric = true;
-    for (unsigned j = 0; j < t[n - 1].length(); ++j)
-      if (!isDigit(t[n - 1][j]))
-      {
-        numeric = false;
-        break;
-      }
-    if (numeric)
-    {
-      satsUsed = t[n - 1].toInt();
-      if (satsUsed > 64)
-        satsUsed = 0; // Plausibilitätsgrenze
-    }
+    satsUsed = t[i].toInt();
+  }
+  else
+  {
+    // Kein separates Feld -> setze gleiche Zahl wie inView
+    satsUsed = satsInView;
   }
   info.satsUsed = satsUsed;
 
   info.valid = true;
   return true;
 }
+
 
 String getGPS()
 {
@@ -228,7 +211,6 @@ String getGPS()
     // Geschwindigkeit in km/h (1 kn = 1.852 km/h)
     double kmh = gnss.speed * 1.852;
 
-    String msg;
     msg = "📡 *GNSS Fix erhalten*\n";
     msg += "🧭 " + fixTxt + " | " + String(gnss.satsUsed) + "/" + String(gnss.satsInView) + " Satelliten\n";
     msg += "📍 [" + slat + ", " + slon + "](https://maps.google.com/?q=" + slat + "," + slon + ")\n";

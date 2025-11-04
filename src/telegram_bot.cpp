@@ -19,7 +19,7 @@ void sendMessage(String text)
 
   String url = String("https://api.telegram.org/bot") + BOT_TOKEN +
                "/sendMessage?chat_id=" + CHAT_ID +
-               "&parse_mode=HTML&text=" + encodedText;
+               "&parse_mode=Markdown&text=" + encodedText;
 
 Serial.println("Sende Telegram Nachricht:");
 Serial.println(url);
@@ -107,14 +107,24 @@ void checkTelegram()
   sendAT("AT+HTTPINIT", 3000);
 
   String resp = httpGet(url);
-  int jsonStart = resp.indexOf("{\"ok\":");
-  if (jsonStart > 0)
-    resp = resp.substring(jsonStart);
 
+  // --- Nur das erste gültige JSON-Objekt extrahieren ---
+  int firstBrace = resp.indexOf('{');
+  int lastBrace = resp.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace)
+    resp = resp.substring(firstBrace, lastBrace + 1);
+  else {
+    Serial.println("Keine gültige JSON-Struktur gefunden");
+    return;
+  }
+
+  // --- JSON deserialisieren ---
   DynamicJsonDocument doc(16384);
-  if (deserializeJson(doc, resp))
+  DeserializationError err = deserializeJson(doc, resp);
+  if (err)
   {
-    Serial.println("JSON Fehler oder keine neuen Daten.");
+    Serial.print("JSON Fehler: ");
+    Serial.println(err.c_str());
     return;
   }
 
