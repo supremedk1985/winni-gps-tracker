@@ -55,3 +55,9 @@ Vor der ersten Nutzung muss die Datei **`example_config.h`** kopiert und angepas
 1. Kopiere:
    ```bash
    cp src/example_config.h src/config.h
+
+
+## Lizenz
+
+Dieses Projekt steht unter der [MIT-Lizenz](./LICENSE).  
+Copyright (c) 2025 Daniel Korte.
