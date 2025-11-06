@@ -106,6 +106,13 @@ void checkTelegram()
 
   String resp = httpGet(url);
 
+  // --- Wenn httpGet leer zurückgibt ---
+  if (resp.length() == 0)
+  {
+    Serial.println("Keine Antwort vom Server");
+    return;
+  }
+
   // --- Nur das erste gültige JSON-Objekt extrahieren ---
   int firstBrace = resp.indexOf('{');
   int lastBrace = resp.lastIndexOf('}');
@@ -117,55 +124,104 @@ void checkTelegram()
     return;
   }
 
-  // --- JSON deserialisieren ---
-  DynamicJsonDocument doc(16384);
+  // --- JSON deserialisieren mit GRÖßEREM BUFFER (32KB für Bildnachrichten) ---
+  DynamicJsonDocument doc(32768);
   DeserializationError err = deserializeJson(doc, resp);
   if (err)
   {
     Serial.print("JSON Fehler: ");
     Serial.println(err.c_str());
+    Serial.printf("JSON Länge: %d bytes\n", resp.length());
 
-    // >>> update_id trotzdem weiterzählen, um nicht zu hängen <<<
-    int pos = resp.indexOf("\"update_id\":");
-    if (pos >= 0)
+    // >>> ROBUSTE update_id Extraktion bei Fehlern <<<
+    long maxUpdateId = lastUpdateId;
+    int searchPos = 0;
+    
+    while (true)
     {
-      long tmp = resp.substring(pos + 13).toInt();
-      if (tmp > lastUpdateId)
+      int pos = resp.indexOf("\"update_id\":", searchPos);
+      if (pos == -1) break;
+      
+      // Finde den Wert zwischen : und dem nächsten Komma/Newline
+      int startValue = pos + 12; // nach "update_id":
+      while (startValue < resp.length() && (resp.charAt(startValue) == ' ' || resp.charAt(startValue) == ':'))
+        startValue++;
+      
+      int endValue = startValue;
+      while (endValue < resp.length() && 
+             resp.charAt(endValue) >= '0' && 
+             resp.charAt(endValue) <= '9')
       {
-        lastUpdateId = tmp;
-        Serial.printf("Überspringe fehlerhaftes Update %ld\n", tmp);
+        endValue++;
       }
+      
+      if (endValue > startValue)
+      {
+        String idStr = resp.substring(startValue, endValue);
+        long tmp = idStr.toInt();
+        if (tmp > maxUpdateId)
+        {
+          maxUpdateId = tmp;
+          Serial.printf("Gefunden: update_id = %ld\n", tmp);
+        }
+      }
+      
+      searchPos = endValue;
+    }
+    
+    if (maxUpdateId > lastUpdateId)
+    {
+      lastUpdateId = maxUpdateId;
+      Serial.printf("→ Überspringe alle Updates bis %ld\n", maxUpdateId);
     }
     return;
   }
 
   JsonArray results = doc["result"];
   if (results.isNull() || results.size() == 0)
+  {
+    Serial.println("Keine neuen Updates");
     return;
+  }
+
+  Serial.printf("Verarbeite %d Update(s)\n", results.size());
 
   for (JsonObject upd : results)
   {
     long updateId = upd["update_id"] | 0;
     if (updateId <= lastUpdateId)
       continue;
+    
+    // WICHTIG: update_id IMMER aktualisieren, auch wenn die Nachricht übersprungen wird
     lastUpdateId = updateId;
 
     JsonObject msg = upd["message"];
     if (msg.isNull() || msg["from"]["is_bot"])
+    {
+      Serial.printf("Update %ld: Bot oder leere Nachricht → übersprungen.\n", updateId);
       continue;
+    }
 
-    // --- Nur Textnachrichten akzeptieren ---
+    // --- Mediennachrichten (Bilder, Videos, Dokumente etc.) überspringen ---
+    if (msg.containsKey("photo") || msg.containsKey("video") || 
+        msg.containsKey("document") || msg.containsKey("audio") ||
+        msg.containsKey("voice") || msg.containsKey("sticker"))
+    {
+      Serial.printf("Update %ld: Mediennachricht → übersprungen.\n", updateId);
+      continue;
+    }
+
+    // --- Nur Textnachrichten verarbeiten ---
     if (!msg.containsKey("text"))
     {
-      Serial.printf("Nicht-Text-Nachricht (z.B. Bild) bei Update %ld → übersprungen.\n", updateId);
+      Serial.printf("Update %ld: Keine Text-Nachricht → übersprungen.\n", updateId);
       continue;
     }
 
     String cmd = String((const char *)(msg["text"] | ""));
     cmd.toLowerCase();
 
-    Serial.print("Empfangen: ");
-    Serial.println(cmd);
+    Serial.printf("Update %ld empfangen: %s\n", updateId, cmd.c_str());
 
     if (cmd == "/info" || cmd == "info")
     {
@@ -174,6 +230,10 @@ void checkTelegram()
     else if (cmd == "/gps" || cmd == "gps")
     {
       getGPSLocation();
+    }
+    else if (cmd == "/start" || cmd == "start")
+    {
+      sendMessage("Winni GPS Tracker aktiv!\n\nBefehle:\n/info - System-Info\n/gps - GPS Position");
     }
     else
     {
