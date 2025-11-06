@@ -7,6 +7,8 @@ const int SD_CD_PIN  = 46;
 
 static bool storageReady = false;
 static uint64_t cachedCardSize = 0;
+static String currentTrackFile = "";
+static bool trackRecording = false;
 
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels)
 {
@@ -47,7 +49,9 @@ bool initStorage()
 
     SD_MMC.setPins(SDMMC_CLK, SDMMC_CMD, SDMMC_DATA);
 
-    if (!SD_MMC.begin("/sdcard", true)) {  // exakt wie dein Script: true = read-only
+    // true = 1-Bit-Modus (langsamer, aber stabiler)
+    // Die Karte ist trotzdem beschreibbar!
+    if (!SD_MMC.begin("/sdcard", true)) {
         Serial.println("Card Mount Failed");
         return false;
     }
@@ -83,4 +87,70 @@ uint64_t getCardSizeMB()
     if (!storageReady)
         initStorage();
     return cachedCardSize;
+}
+
+bool createGPSTrackFile()
+{
+    if (!storageReady) {
+        Serial.println("Storage not ready");
+        return false;
+    }
+
+    // Erstelle Dateinamen mit Zeitstempel
+    char filename[50];
+    unsigned long timestamp = millis();
+    snprintf(filename, sizeof(filename), "/gps_track_%lu.csv", timestamp);
+    
+    currentTrackFile = String(filename);
+    
+    // Erstelle Datei mit CSV-Header
+    File file = SD_MMC.open(currentTrackFile.c_str(), FILE_WRITE);
+    if (!file) {
+        Serial.println("Failed to create GPS track file");
+        return false;
+    }
+    
+    // CSV Header schreiben
+    file.println("Latitude,Longitude,Timestamp,Speed_kmh,Altitude_m");
+    file.close();
+    
+    trackRecording = true;
+    Serial.printf("GPS Track file created: %s\n", currentTrackFile.c_str());
+    
+    return true;
+}
+
+bool appendGPSData(double lat, double lon, const String& timestamp, double speed_kmh, double altitude_m)
+{
+    if (!storageReady || !trackRecording) {
+        return false;
+    }
+    
+    File file = SD_MMC.open(currentTrackFile.c_str(), FILE_APPEND);
+    if (!file) {
+        Serial.println("Failed to open GPS track file for writing");
+        return false;
+    }
+    
+    // CSV Zeile schreiben: Lat,Lon,Time,Speed,Altitude
+    char line[200];
+    snprintf(line, sizeof(line), "%.6f,%.6f,%s,%.2f,%.2f", 
+             lat, lon, timestamp.c_str(), speed_kmh, altitude_m);
+    
+    file.println(line);
+    file.close();
+    
+    Serial.printf("GPS data appended: %s\n", line);
+    
+    return true;
+}
+
+String getCurrentTrackFilename()
+{
+    return currentTrackFile;
+}
+
+bool isTrackRecording()
+{
+    return trackRecording;
 }
