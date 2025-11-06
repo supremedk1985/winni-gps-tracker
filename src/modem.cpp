@@ -95,27 +95,6 @@ got_len:
   Serial.println(body);
   Serial.println("--------------------------------------");
 
-  // --- Bilder oder Nicht-Text-Nachrichten erkennen ---
-  if (body.indexOf("\"photo\"") != -1)
-  {
-    Serial.println("Bildnachricht erkannt → übersprungen.");
-
-    // update_id aus der Antwort extrahieren
-    int pos = body.indexOf("\"update_id\":");
-    if (pos >= 0)
-    {
-      long tmp = body.substring(pos + 13).toInt();
-      extern long lastUpdateId;
-      if (tmp > lastUpdateId)
-      {
-        lastUpdateId = tmp;
-        Serial.printf("Update %ld übersprungen (Bildnachricht)\n", tmp);
-      }
-    }
-
-    return ""; // keine weitere Verarbeitung
-  }
-
   return body;
 }
 
