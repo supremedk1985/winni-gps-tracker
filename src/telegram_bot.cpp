@@ -1,16 +1,14 @@
 #include "telegram_bot.h"
 #include "modem.h"
 #include "settings.h"
-#include "gnss_onboard.h"
+#include "gps.h"
 #include "storage.h"
 #include "config.h"
 #include "utils.h"
+#include "gps.h"
 #include <ArduinoJson.h>
 
 long lastUpdateId = 0;
-bool gpsBusy = false;
-
-
 
 // ==================== Telegram Send ====================
 void sendMessage(String text)
@@ -21,8 +19,8 @@ void sendMessage(String text)
                "/sendMessage?chat_id=" + CHAT_ID +
                "&parse_mode=Markdown&text=" + encodedText;
 
-Serial.println("Sende Telegram Nachricht:");
-Serial.println(url);
+  Serial.println("Sende Telegram Nachricht:");
+  Serial.println(url);
 
   sendAT("AT+HTTPTERM", 1500);
   sendAT("AT+HTTPINIT", 3000);
@@ -113,7 +111,8 @@ void checkTelegram()
   int lastBrace = resp.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace)
     resp = resp.substring(firstBrace, lastBrace + 1);
-  else {
+  else
+  {
     Serial.println("Keine gültige JSON-Struktur gefunden");
     return;
   }
@@ -125,6 +124,18 @@ void checkTelegram()
   {
     Serial.print("JSON Fehler: ");
     Serial.println(err.c_str());
+
+    // >>> update_id trotzdem weiterzählen, um nicht zu hängen <<<
+    int pos = resp.indexOf("\"update_id\":");
+    if (pos >= 0)
+    {
+      long tmp = resp.substring(pos + 13).toInt();
+      if (tmp > lastUpdateId)
+      {
+        lastUpdateId = tmp;
+        Serial.printf("Überspringe fehlerhaftes Update %ld\n", tmp);
+      }
+    }
     return;
   }
 
@@ -143,6 +154,13 @@ void checkTelegram()
     if (msg.isNull() || msg["from"]["is_bot"])
       continue;
 
+    // --- Nur Textnachrichten akzeptieren ---
+    if (!msg.containsKey("text"))
+    {
+      Serial.printf("Nicht-Text-Nachricht (z.B. Bild) bei Update %ld → übersprungen.\n", updateId);
+      continue;
+    }
+
     String cmd = String((const char *)(msg["text"] | ""));
     cmd.toLowerCase();
 
@@ -155,10 +173,11 @@ void checkTelegram()
     }
     else if (cmd == "/gps" || cmd == "gps")
     {
-      if (!gpsBusy)
-        getGPS();
-      else
-        Serial.println("GNSS bereits aktiv, ignoriere weiteren /gps.");
+      getGPSLocation();
+    }
+    else
+    {
+      Serial.println("Unbekannter Befehl → ignoriert.");
     }
   }
 }

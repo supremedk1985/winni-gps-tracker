@@ -53,7 +53,8 @@ String httpGet(String url)
           goto got_len;
         }
         line = "";
-      } else line += c;
+      }
+      else line += c;
     }
   }
 got_len:
@@ -62,36 +63,59 @@ got_len:
   delay(500);
   modem.printf("AT+HTTPREAD=0,%d\r\n", contentLen);
 
+  // --- komplette Antwort lesen ---
   String body = "";
-  bool readStarted = false;
   unsigned long t1 = millis();
-
-  while (millis() - t1 < 5000)
+  while (millis() - t1 < 8000)
   {
     while (modem.available())
     {
       char c = modem.read();
-
-      // Start erst nach dem ersten '{'
-      if (!readStarted)
-      {
-        if (c == '{') { readStarted = true; body += c; }
-      }
-      else
-      {
-        body += c;
-      }
+      body += c;
+      t1 = millis(); // Timeout zurücksetzen solange Daten kommen
     }
   }
 
-  // Alles nach der letzten '}' abschneiden
-  int lastBrace = body.lastIndexOf('}');
-  if (lastBrace > 0)
-    body = body.substring(0, lastBrace + 1);
+  // --- alle JSON-Blöcke vollständig berücksichtigen ---
+  int firstBrace = body.indexOf('{');
+  int lastBrace  = body.lastIndexOf('}');
+  while (true)
+  {
+    int next = body.indexOf('}', lastBrace + 1);
+    if (next == -1) break;
+    lastBrace = next;
+  }
+
+  if (firstBrace >= 0 && lastBrace > firstBrace)
+    body = body.substring(firstBrace, lastBrace + 1);
+  else
+    body = "";
 
   Serial.println("---- HTTPREAD Antwort (bereinigt) ----");
   Serial.println(body);
   Serial.println("--------------------------------------");
+
+  // --- Bilder oder Nicht-Text-Nachrichten erkennen ---
+  if (body.indexOf("\"photo\"") != -1)
+  {
+    Serial.println("Bildnachricht erkannt → übersprungen.");
+
+    // update_id aus der Antwort extrahieren
+    int pos = body.indexOf("\"update_id\":");
+    if (pos >= 0)
+    {
+      long tmp = body.substring(pos + 13).toInt();
+      extern long lastUpdateId;
+      if (tmp > lastUpdateId)
+      {
+        lastUpdateId = tmp;
+        Serial.printf("Update %ld übersprungen (Bildnachricht)\n", tmp);
+      }
+    }
+
+    return ""; // keine weitere Verarbeitung
+  }
+
   return body;
 }
 
@@ -117,10 +141,12 @@ String getSignalQuality()
 {
   String resp = sendAT("AT+CSQ", 2000);
   int pos = resp.indexOf("+CSQ: ");
-  if (pos < 0) return "Signal: unbekannt";
+  if (pos < 0)
+    return "Signal: unbekannt";
   int comma = resp.indexOf(",", pos);
   int val = resp.substring(pos + 6, comma).toInt();
-  if (val == 99) return "Kein Netz";
+  if (val == 99)
+    return "Kein Netz";
   int dBm = -113 + (val * 2);
   return "Signalstaerke: " + String(dBm) + " dBm";
 }
