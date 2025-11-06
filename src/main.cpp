@@ -6,21 +6,35 @@
 
 void setup()
 {
-  Serial.begin(115200);
-  Serial.println("== Winni GPS Tracker ==");
+    Serial.begin(115200);
+    Serial.println("== Winni GPS Tracker ==");
 
-  setupModem();
+    setupModem();
 
-  if (!initStorage())
-    Serial.println("Keine SD-Karte erkannt");
+    if (!initStorage()) {
+        Serial.println("Keine SD-Karte erkannt");
+    } else {
+        Serial.println("SD-Karte bereit für GPS-Aufzeichnung");
+    }
 
-  initGPS();
+    initGPS();
 
-  sendMessage("Winni GPS Tracker gestartet.");
+    sendMessage("Winni GPS Tracker gestartet.");
+    
+    // Optional: GPS-Tracking automatisch starten
+    // Kommentar entfernen um automatisch zu starten:
+    // delay(5000); // 5 Sekunden warten bis GPS-Fix
+    // startGPSTracking();
 }
 
 void loop()
 {
-  checkTelegram();
-    delay(10000);
+    // Telegram Bot Nachrichten prüfen
+    checkTelegram();
+    
+    // GPS Tracking verarbeiten (wenn aktiv)
+    processGPSTracking();
+    
+    // Kurze Pause
+    delay(1000); // 1 Sekunde (für GPS-Tracking sollte die Loop öfter laufen)
 }

@@ -12,4 +12,10 @@ void initGPS();
 void updateGPS();
 String getGPSLocation();
 
+// GPS Track Recording (alle 5 Meter)
+void startGPSTracking();
+void stopGPSTracking();
+void processGPSTracking();
+bool isGPSTracking();
+
 #endif
