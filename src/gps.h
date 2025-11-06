@@ -2,20 +2,22 @@
 #define GPS_H
 
 #include <Arduino.h>
-#include <TinyGPSPlus.h>
+#include <TinyGPS++.h>
+#include <FS.h>
+#include <SD_MMC.h>
 
 extern HardwareSerial gpsSerial;
 extern TinyGPSPlus gps;
-extern bool gpsBusy;
 
+// Basis-GPS-Funktionen
 void initGPS();
 void updateGPS();
 String getGPSLocation();
 
-// GPS Track Recording (alle 5 Meter)
-void startGPSTracking();
-void stopGPSTracking();
-void processGPSTracking();
-bool isGPSTracking();
+// GPS-Logging-Funktionen
+void logGPSData();
+
+// Track-Export-Funktionen
+bool exportTrackToGPX(int days, const char* outputFile);
 
 #endif
