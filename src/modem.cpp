@@ -28,6 +28,9 @@ String httpGet(String url)
   String result;
   while (modem.available()) modem.read();
 
+  // HTTPS aktivieren (Pflicht für Telegram)
+  sendAT("AT+HTTPSSL=1", 1000);
+
   modem.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
   delay(300);
   modem.println("AT+HTTPACTION=0");
