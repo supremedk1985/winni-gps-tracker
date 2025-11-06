@@ -1,18 +1,20 @@
 #include <Arduino.h>
 #include "modem.h"
 #include "telegram_bot.h"
-#include "gnss_onboard.h"
+#include "gps.h"
 #include "storage.h"
 
 void setup()
 {
   Serial.begin(115200);
   Serial.println("== Winni GPS Tracker ==");
-  
+
   setupModem();
 
   if (!initStorage())
-  Serial.println("Keine SD-Karte erkannt");
+    Serial.println("Keine SD-Karte erkannt");
+
+  initGPS();
 
   sendMessage("Winni GPS Tracker gestartet.");
 }
@@ -20,5 +22,5 @@ void setup()
 void loop()
 {
   checkTelegram();
-  delay(10000);
+    delay(10000);
 }
