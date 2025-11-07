@@ -4,7 +4,7 @@
 
 **Modulares PlatformIO-Projekt für Wohnmobile, Wohnwagen und Fahrzeuge ohne Abo**
 
-**☕ Wenn dir das Projekt gefällt, spendiere mir einen Kaffee: [PayPal](https://py.pl/QssGPV1SJSHl8tVxTpwRFg)**
+**☕ Wenn dir das Projekt gefällt, spendiere mir einen Kaffee: [PayPal](https://www.paypal.me/supremeDK1)**
 
 
 Der Winni GPS Tracker ist ein eigenständiger, Cloud-freier Fahrzeug-Tracker auf Basis des **ESP32-S3-A7670E-4G** Moduls.  
