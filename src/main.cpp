@@ -3,6 +3,7 @@
 #include "telegram_bot.h"
 #include "gps.h"
 #include "storage.h"
+#include "traccar.h"  
 
 void setup()
 {
@@ -31,5 +32,9 @@ void loop()
   // GPS-Daten loggen (wird intern durch Intervall gesteuert)
   logGPSData();
   
-  delay(1000);
+delay(5000);
+
+send2Traccar(); 
+
+  delay(5000);
 }
