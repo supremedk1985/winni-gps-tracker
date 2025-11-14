@@ -7,13 +7,22 @@ void send2Traccar()
 {
   updateGPS();
 
+  if (!gps.location.isValid()) {
+    Serial.println("Kein gültiger GPS-Fix");
+    return;
+  }
+
   String slat = String(gps.location.lat(), 6);
   String slon = String(gps.location.lng(), 6);
   String sspeed = String(gps.speed.kmph(), 1);
   String sbearing = String(gps.course.deg(), 1);
   String salt = String(gps.altitude.meters(), 1);
-  String stime = String(gps.time.value());  // oder millis()/1000, falls kein Fix
 
+  // Unix-Zeit aus GPS, wenn verfügbar
+  unsigned long ts = gps.time.isValid() ? gps.time.value() : millis() / 1000;
+  String stime = String(ts);
+
+  // Traccar nimmt Daten auf Port 1881 (osmand-Protokoll)
   String url = "http://supremedk1.synology.me:1881/"
                "?id=winni-gps-lea-nina"
                "&lat=" + slat +
