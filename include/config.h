@@ -5,10 +5,15 @@
 static const char APN[]    = "internet";
 static const char USER[]   = "";
 static const char PASS[]   = "";
-static const char SERVER[] = "supremedk1.synology.me";
+// ACHTUNG: Diese vier Werte werden im ganzen Projekt NICHT MEHR benutzt (Stand
+// 2026-09-08 nachgeprüft). Sie stammen aus einem früheren Uplink-Versuch. Der
+// Server für Traccar wird in der eigenen src/config.h gesetzt, siehe
+// src/example_config.h. Hier stand bis zum 08.09.2026 ein echter DynDNS-Name --
+// solche Werte gehören nicht in ein öffentliches Repository.
+static const char SERVER[] = "dein-server.example.net";
 static const int  PORT     = 1880;
 static const char PATH[]   = "/gps";
-static const char TOKEN[]  = "jlkdsfjhksdkf230s3490";
+static const char TOKEN[]  = "DEIN_TOKEN";
 
 #define MODEM_PWR_PIN 33
 #define MODEM_RX 17

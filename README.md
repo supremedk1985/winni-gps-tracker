@@ -30,6 +30,21 @@ Benötigt wird eine Telegram Account um die Verbindung zum Winni GPS Tracker her
 
 ---
 
+## 📍 Traccar (optional)
+
+Zusätzlich zu Telegram kann der Tracker seine Position an einen eigenen
+[Traccar](https://www.traccar.org/)-Server melden (osmand-Protokoll).
+
+Server, Port und Gerätekennung stehen in der eigenen `src/config.h` — sie sind
+**nicht** Teil dieses Repositories. Die Vorlage mit Erklärung steht in
+`src/example_config.h`.
+
+> **Empfehlung: HTTPS.** Beim osmand-Protokoll gehen Standort und Gerätekennung
+> im Klartext durchs Netz, und die Kennung ist das einzige Merkmal, an dem der
+> Server das Fahrzeug erkennt. Ein Reverse Proxy mit TLS davor (Caddy, nginx)
+> kostet wenig und verhindert Mitlesen und Einspeisen falscher Positionen.
+> Das Modem kann TLS, `AT+HTTPSSL=1` setzt `httpGet()` bereits.
+
 ## 💬 Telegram-Befehle
 
 | Befehl | Beschreibung |

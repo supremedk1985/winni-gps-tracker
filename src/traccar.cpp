@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "modem.h"
 #include "gps.h"
+#include "config.h"
 
 void send2Traccar()
 {
@@ -22,9 +23,12 @@ void send2Traccar()
   unsigned long ts = gps.time.isValid() ? gps.time.value() : millis() / 1000;
   String stime = String(ts);
 
-  // Traccar nimmt Daten auf Port 1881 (osmand-Protokoll)
-  String url = "http://supremedk1.synology.me:1881/"
-               "?id=winni-gps-lea-nina"
+  // Adresse und Gerätekennung stehen in der EIGENEN config.h (nicht im Repo,
+  // siehe example_config.h). Die Kennung ist beim osmand-Protokoll das einzige
+  // Merkmal, an dem der Server das Fahrzeug erkennt -- wer sie kennt, kann
+  // beliebige Positionen einspeisen. Deshalb gehört sie nicht in den Quelltext.
+  String url = String(TRACCAR_SCHEME) + "://" + TRACCAR_HOST + ":" + String(TRACCAR_PORT) + "/"
+               "?id=" + TRACCAR_DEVICE_ID +
                "&lat=" + slat +
                "&lon=" + slon +
                "&speed=" + sspeed +
